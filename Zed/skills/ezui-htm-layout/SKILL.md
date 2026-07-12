@@ -34,6 +34,7 @@ description: 指导如何用EZUI框架编写htm布局文件，包括样式定义
 - 不要把 `<style>` 放在容器标签内部（如 `<vbox>` 里面）
 - 不要用C++代码设置 HoverStyle/ActiveStyle（会失去htm的灵活性）
 - 不支持后代选择器（如 `#parent .child`），每个控件用ID直接定位
+- **逗号分隔的ID+伪类选择器可能不生效**，如 `#btn1:hover, #btn2:hover`。改用类选择器：给控件加 `class="myClass"`，然后写 `.myClass:hover`
 
 ## 样式隔离
 
@@ -50,7 +51,7 @@ description: 指导如何用EZUI框架编写htm布局文件，包括样式定义
 | 标签选择器 | `button` | 匹配所有 `<button>` 标签 |
 | 属性选择器 | `[name=close]` | 匹配 `name="close"` 的控件 |
 | 伪类 | `:hover` / `:active` / `:checked` / `:disabled` | 悬停/按下/选中/禁用状态 |
-| 多选择器 | `#minBtn, #maxBtn` | 逗号分隔，同时匹配多个 |
+| 多选择器（静态） | `#minBtn, #maxBtn` | 逗号分隔，同时匹配多个。注意：**带伪类时建议用类选择器代替** |
 | 滚动条 | `#list::-webkit-scrollbar` | 自定义滚动条样式 |
 
 ## 功能归属
