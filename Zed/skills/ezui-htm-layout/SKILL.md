@@ -54,6 +54,41 @@ description: 指导如何用EZUI框架编写htm布局文件，包括样式定义
 | 多选择器（静态） | `#minBtn, #maxBtn` | 逗号分隔，同时匹配多个。注意：**带伪类时建议用类选择器代替** |
 | 滚动条 | `#list::-webkit-scrollbar` | 自定义滚动条样式 |
 
+## C++ 自定义控件注意事项
+
+### 需要绘制文字时继承 `Label` 而非 `Control`
+
+`Control` 的 `OnForePaint` 中 `DrawString` 绘制文字可能不生效。如果需要自定义控件显示文字，直接继承 `Label`，用 `SetText` 设置文字，在 `OnForePaint` 中调用 `__super::OnForePaint(args)` 让基类绘制：
+
+```cpp
+class TabButton : public ezui::Label {
+public:
+    TabButton(Object* parent) : Label(parent) {
+        SetText(L"标题");
+    }
+protected:
+    void OnForePaint(PaintEventArgs& args) override {
+        // 先设置文字颜色
+        Style.ForeColor = Colors::TextColor();
+        // 自定义背景绘制
+        args.Graphics.SetColor(bgColor);
+        args.Graphics.FillRectangle(GetRect());
+        // 让Label绘制文字
+        __super::OnForePaint(args);
+        // 自定义前景绘制
+    }
+};
+```
+
+### 子控件必须 `Add` 到父控件
+
+构造时传入父控件只会添加到 `m_childObjects`（生命周期管理），不会添加到 `m_controls`（布局和绘制）。必须显式调用 `parentControl->Add(childControl)`。
+
+```cpp
+TabButton* btn = new TabButton(this);  // 传入this，只管理生命周期
+this->Add(btn);                         // 必须Add到m_controls，才能被绘制
+```
+
 ## 功能归属
 
 | 功能 | 位置 | 说明 |
