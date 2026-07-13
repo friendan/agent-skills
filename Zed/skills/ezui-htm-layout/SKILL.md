@@ -64,6 +64,14 @@ description: 指导如何用EZUI框架编写htm布局文件，包括样式定义
 | 窗口行为 | htm `action` 属性 | `mini` / `max` / `close` / `title` / `move` |
 | 业务逻辑 | C++ 代码 | 标签切换、导航、事件处理 |
 
+## 布局撑满窗口
+
+作为 `IFrame` 子控件的**根布局**（`vbox`/`vlayout`/`hlayout`），必须加 `dock="fill"` 才能撑满整个窗口：
+
+```html
+<vbox id="mainLayout" dock="fill">
+```
+
 ## 内联样式
 
 支持在标签上用 `style` 属性设置内联样式，优先级最高。
