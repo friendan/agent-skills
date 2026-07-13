@@ -72,6 +72,21 @@ description: 指导如何用EZUI框架编写htm布局文件，包括样式定义
 <vbox id="mainLayout" dock="fill">
 ```
 
+## 模拟内边距（padding）
+
+EZUI 的控件不支持 `padding` 属性。可以用容器 + `spacer` 模拟：
+
+```html
+<!-- 给 edit 添加左右内边距 10px -->
+<hlayout id="urlBoxContainer" style="background-color: rgb(30,30,38); border-radius: 15px; border: 1px solid...">
+    <spacer width="10"></spacer>
+    <edit id="urlBox" style="background-color: rgba(0,0,0,0);"></edit>
+    <spacer width="10"></spacer>
+</hlayout>
+```
+
+把边框和圆角放到外层容器上，内部控件透明无边框，`spacer` 撑出间距。
+
 ## 内联样式
 
 支持在标签上用 `style` 属性设置内联样式，优先级最高。
