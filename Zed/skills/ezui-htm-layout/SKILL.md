@@ -176,3 +176,20 @@ if (m_maxBtn) {
 ```
 
 注意：`label` 的 `width="auto"` 能正常包裹文字宽度，不受此限制。
+
+## ⚠️ `hlayout` 背景色修改后需要 `Invalidate` 刷新
+
+C++ 中修改 `hlayout` 的 `Style.BackColor` 后，**不会立即触发重绘**。需要调用父容器的 `Invalidate()` 强制刷新，否则背景色变化要等到鼠标划过触发 `:hover` 伪类时才显现。
+
+```cpp
+void SwitchTab(int index) {
+    // 修改 hlayout 背景色
+    m_tabs[index]->Style.BackColor = activeColor;
+    
+    // 必须强制刷新父容器，背景色立即生效
+    auto* tabBar = FindControl(L"tabBar");
+    if (tabBar) tabBar->Invalidate();
+}
+```
+
+同时注意：**`hlayout` 的子控件如果设置了不透明背景色，会遮挡 `hlayout` 的背景变化**。需要把子控件背景设为透明（不设 `background-color` 或设为 `rgba(0,0,0,0)`），才能透出父容器的背景色。
