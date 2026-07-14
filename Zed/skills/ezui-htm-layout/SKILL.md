@@ -131,3 +131,32 @@ EZUI 的控件不支持 `padding` 属性。可以用容器 + `spacer` 模拟：
 ```
 
 内联样式只对静态状态（`ControlState::Static`）生效，不适用于 hover/active 等交互状态。
+
+## ⚠️ `hlayout` 宽度陷阱
+
+**`hlayout` 嵌套 `hlayout` 时，内层的 `width="auto"` 会计算出 0 宽度**，导致子控件不可见。
+
+```html
+<!-- ❌ 内层 hlayout width="auto" 宽度为 0，主页标签不可见 -->
+<hlayout id="tabBar">
+    <hlayout id="tab0" class="tab" width="auto">
+        <label id="tabTitle0" text="主页"></label>
+        <label id="tabClose0" text="✕"></label>
+    </hlayout>
+</hlayout>
+
+<!-- ✅ 给内层 hlayout 设置固定宽度 -->
+<hlayout id="tabBar">
+    <hlayout id="tab0" class="tab" width="80">
+        <label id="tabTitle0" text="主页"></label>
+        <label id="tabClose0" text="✕"></label>
+    </hlayout>
+</hlayout>
+
+<!-- ✅ 或者直接用 label 代替内层 hlayout（label 的 width="auto" 正常） -->
+<hlayout id="tabBar">
+    <label id="tab0" class="tab" text="主页" width="auto"></label>
+</hlayout>
+```
+
+注意：`label` 的 `width="auto"` 能正常包裹文字宽度，不受此限制。
