@@ -193,3 +193,43 @@ void SwitchTab(int index) {
 ```
 
 同时注意：**`hlayout` 的子控件如果设置了不透明背景色，会遮挡 `hlayout` 的背景变化**。需要把子控件背景设为透明（不设 `background-color` 或设为 `rgba(0,0,0,0)`），才能透出父容器的背景色。
+
+## ⚠️ 标签拖拽排序的实现要点
+
+EzUI 中实现标签拖拽排序的关键：
+
+### 使用 `WndProc` 而非 `EventHandler` 处理鼠标拖拽
+
+`EventHandler` 中的 `OnMouseMove`/`OnMouseUp` 事件在部分控件（如 `hlayout`）上可能不触发。可靠的方案是**重写 `Window::WndProc`** 虚方法，直接处理 Win32 鼠标消息：
+
+```cpp
+// 在头文件中声明
+virtual LRESULT WndProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
+
+// 实现
+LRESULT BrowserWindow::WndProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    if (uMsg == WM_LBUTTONDOWN) {
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        // 检测鼠标是否点击了标签，启动拖拽
+    }
+    if (uMsg == WM_MOUSEMOVE && m_dragging) {
+        // 用 lParam 坐标 + GetRect 检测目标标签，高亮
+    }
+    else if (uMsg == WM_LBUTTONUP && m_dragging) {
+        // 松开鼠标，执行交换
+    }
+    return BaseClass::WndProc(uMsg, wParam, lParam);
+}
+```
+
+### 坐标转换
+
+`WM_MOUSEMOVE` 的 `lParam` 是**窗口客户区坐标**。需要减去父容器（如 `tabBar`）的 `GetRect().X/Y` 得到相对坐标，然后用每个标签的 `GetRect()` 来判断鼠标在哪个标签区域内。
+
+### 交互流程
+1. `WM_LBUTTONDOWN` — 记录 `m_dragSrcIdx`，设置 `m_dragging = true`
+2. `WM_MOUSEMOVE` — 遍历可见标签，用 `GetRect` 判断鼠标在哪个标签上，高亮目标标签
+3. `WM_LBUTTONUP` — 执行 `SwapTabs(src, target)`，恢复所有标签颜色
+
+### 颜色恢复
+拖拽结束后需要恢复所有标签的颜色（激活的恢复为激活色，其他的恢复为非激活色），否则高亮色会残留。
