@@ -132,6 +132,22 @@ EZUI 的控件不支持 `padding` 属性。可以用容器 + `spacer` 模拟：
 
 内联样式只对静态状态（`ControlState::Static`）生效，不适用于 hover/active 等交互状态。
 
+## ⚠️ `action` 属性与 C++ EventHandler 冲突
+
+htm 中设置了 `action="mini"`/`action="max"`/`action="close"` 的控件，**EzUI 框架已内置处理**对应行为（最小化/最大化/关闭），不要再用 C++ 代码绑定 `EventHandler`，否则会覆盖框架行为导致不生效。
+
+```html
+<!-- htm 中用 action 属性声明窗口行为 -->
+<label id="maxBtn" action="max"></label>
+```
+
+```cpp
+// ❌ C++ 中不要重复绑定，会覆盖 action 的框架处理
+if (m_maxBtn) {
+    m_maxBtn->EventHandler = [this](auto*, auto&) { OnMaximizeRestore(); };
+}
+```
+
 ## ⚠️ `hlayout` 宽度陷阱
 
 **`hlayout` 嵌套 `hlayout` 时，内层的 `width="auto"` 会计算出 0 宽度**，导致子控件不可见。
