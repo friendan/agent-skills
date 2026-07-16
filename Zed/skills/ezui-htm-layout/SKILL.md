@@ -150,7 +150,31 @@ if (m_maxBtn) {
 
 ## ⚠️ `hlayout` 宽度陷阱
 
+### 内层 `hlayout` 的 `width="auto"` 为 0
+
 **`hlayout` 嵌套 `hlayout` 时，内层的 `width="auto"` 会计算出 0 宽度**，导致子控件不可见。
+
+### 未指定 `width` 的兄弟控件等分剩余空间
+
+`hlayout` 中**没有指定 `width` 的多个子控件会平分剩余空间**，而不是按内容自适应。如果想一个占剩余空间、另一个按内容宽度，需要用 `width="star"` + `width="auto"`。
+
+```html
+<!-- ❌ 两个控件都没指定 width，各占一半，中间距离很大 -->
+<hlayout>
+    <hlayout id="groupSwitcher">...</hlayout>
+    <hlayout id="urlBoxContainer">...</hlayout>  <!-- 被撑到右侧，离 groupSwitcher 很远 -->
+</hlayout>
+
+<!-- ✅ 把 urlBoxContainer 放入 groupSwitcher 内部，或给 groupSwitcher 加 width="auto" -->
+<hlayout id="groupSwitcher">
+    <label>A</label><label>B</label>...
+    <hlayout id="urlBoxContainer" width="star">
+        <edit id="urlBox"></edit>
+    </hlayout>
+</hlayout>
+```
+
+当 `urlBoxContainer` 作为 `groupSwitcher` 的子控件时，它只能在 `groupSwitcher` 的宽度范围内布局，不会跑到半个窗口外去。
 
 ```html
 <!-- ❌ 内层 hlayout width="auto" 宽度为 0，主页标签不可见 -->
