@@ -325,3 +325,36 @@ void SwitchGroup(int group) {
     // 切换到 activeIdx...
 }
 ```
+
+### 分组按钮角标的实现
+
+用 `hlayout` 做按钮容器，内部放字母 `label` 和角标 `label`。角标用红色背景 + `border-radius` 模拟圆形：
+
+```html
+<hlayout id="groupBtn0" class="groupBtn" width="38" height="32">
+    <spacer width="star"></spacer>
+    <label id="groupBtnLabel0" class="groupBtnLabel" text="A"></label>
+    <spacer width="2"></spacer>
+    <label id="groupBtnBadge0" class="groupBtnBadge" text=""></label>
+    <spacer width="2"></spacer>
+</hlayout>
+```
+
+```css
+.groupBtn { background-color: rgb(45,45,55); border-radius: 4px; }
+.groupBtnLabel { color: rgb(200,200,200); font-size: 14px; }
+.groupBtnBadge {
+    color: rgb(255,255,255);
+    font-size: 8px;
+    background-color: rgb(200,60,60);
+    border-radius: 6px;
+    width: 12px;
+    height: 12px;
+}
+```
+
+C++ 中更新角标时调用 `SetText` 设置数字，无标签时 `SetVisible(false)` 隐藏。注意 `hlayout` 本身不响应鼠标事件，需要在内部的 `groupBtnLabel` 上绑 `EventHandler`。
+
+### 初始化时更新所有分组的角标
+
+启动时需要调用 `UpdateGroupBadge` 初始化所有分组的角标，否则角标 `label` 默认可见但文字为空，会显示空白红点。
