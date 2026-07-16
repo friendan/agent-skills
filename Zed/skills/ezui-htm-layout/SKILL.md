@@ -233,3 +233,71 @@ LRESULT BrowserWindow::WndProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 ### 颜色恢复
 拖拽结束后需要恢复所有标签的颜色（激活的恢复为激活色，其他的恢复为非激活色），否则高亮色会残留。
+
+## ⚠️ 标签栏分组实现要点
+
+### 数据结构
+每个分组独立维护自己的标签和页面数组，以及当前活动标签索引：
+
+```cpp
+static constexpr int kGroupCount = 5;
+static constexpr int kMaxTabsPerGroup = 10;
+ezui::Label* m_tabs[kGroupCount][kMaxTabsPerGroup];
+ezui::Control* m_pages[kGroupCount][kMaxTabsPerGroup];
+int m_activeTabInGroup[kGroupCount];
+int m_currentGroup;
+```
+
+### `FindControl` 无法搜索不可见父容器中的子控件
+
+**这是最关键的坑。** 如果 htm 中某个容器设置了 `visible="false"`，它内部的子控件无法通过 `FindControl` 找到，返回 `nullptr`。
+
+```cpp
+// ❌ 如果 tabBar1~tabBar4 在 htm 中 visible="false"，内部控件找不到
+for (int g = 0; g < kGroupCount; ++g) {
+    for (int i = 0; i < kMaxTabsPerGroup; ++i) {
+        m_tabs[g][i] = FindControl(L"g" + g + L"_tab" + i); // 隐身的组返回 nullptr
+    }
+}
+
+// ✅ 先显示所有容器，完成查找后再隐藏非当前组
+for (int g = 0; g < kGroupCount; ++g) {
+    auto* tb = FindControl(L"tabBar" + g);
+    if (tb) tb->SetVisible(true);
+}
+// ... 执行 FindControl 查找子控件 ...
+SwitchGroup(0); // 切回分组 0，自动隐藏其他组
+```
+
+### 所有 tabBar 都需要 `action="title"`
+
+每个分组的 `tabBar` 都需要加 `action="title"`，否则切换到该组时无法拖动窗口。侧边栏和状态栏的 `action="title"` 也需要保留。
+
+### 分组按钮使用 `label` 而非 `hlayout`
+
+分组按钮应使用 `<label>` 而非 `<hlayout>` + 子 `label` 的结构，因为 `hlayout` 不响应鼠标事件，`label` 可以直接绑 `EventHandler`。
+
+```html
+<!-- ✅ label 做按钮，点击区域覆盖整个控件 -->
+<label id="groupBtn0" class="groupBtn" text="A" width="38" height="32" font-size="14"></label>
+```
+
+### 切换到新分组时自动创建标签
+
+如果目标分组一个标签都没有，应该在 `SwitchGroup` 中自动创建一个新标签，而不是显示空白标签栏。
+
+```cpp
+void SwitchGroup(int group) {
+    // 切换 tabBar 和 pageContainer 的可见性...
+    
+    int activeIdx = m_activeTabInGroup[group];
+    if (!m_tabs[group][activeIdx] || !m_tabs[group][activeIdx]->IsVisible()) {
+        int slot = FindNewTabSlot(group);
+        if (slot >= 0) {
+            m_tabs[group][slot]->SetVisible(true);
+            activeIdx = slot;
+        }
+    }
+    // 切换到 activeIdx...
+}
+```
