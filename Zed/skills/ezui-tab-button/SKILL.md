@@ -88,8 +88,9 @@ std::vector<bool> m_tabHover;       // hover 状态记录
 
 ```cpp
 // 事件
-std::function<void(int index)> OnTabChanged;  // 标签切换
-std::function<void(int index)> OnTabClosed;   // 标签关闭
+std::function<bool(int oldIndex, int newIndex)> OnTabChanging;  // 标签切换前，返回false阻止切换
+std::function<void(int oldIndex, int newIndex)> OnTabChanged;   // 标签切换，参数为旧索引和新索引
+std::function<void(int index)> OnTabClosed;                     // 标签关闭
 
 // 增删标签
 TabButton* AddTab(const UIString& title);                              // 追加标签
@@ -152,8 +153,12 @@ tab->SetUrl(L"https://example.com");
 tab->SetDir(L"C:\\MyFolder");
 
 // 监听事件
-tabBar->OnTabChanged = [this](int index) {
-    // 切换到 index 标签时的处理
+tabBar->OnTabChanging = [](int oldIdx, int newIdx) -> bool {
+    if (newIdx == 2) return false; // 阻止切换到索引2
+    return true;
+};
+tabBar->OnTabChanged = [this](int oldIdx, int newIdx) {
+    // 从 oldIdx 切换到 newIdx 的处理
 };
 tabBar->OnTabClosed = [this](int index) {
     // 关闭 index 标签后的处理
@@ -260,7 +265,9 @@ if (closeRect.Contains(arg.Location)) { /* 关闭 */ }
 
 ### 5. 事件触发时机
 
-- `OnTabChanged` — 在 `SetActiveTab` 中触发
+- `OnTabChanging` — 在 `SetActiveTab` 中最先触发，返回 `false` 可阻止切换
+- `OnTabChanged` — 在 `SetActiveTab` 中切换成功后触发，参数为 `(oldIndex, newIndex)`
+  - 如果 `index == m_activeTab` 则跳过，不触发任何事件
 - `OnTabClosed` — 在 `RemoveTab` 中触发（在控件已删除、布局已刷新之后）
 - `SwapTabs` 不触发事件
 
