@@ -81,6 +81,7 @@ std::vector<bool> m_tabHover;       // hover 状态记录
 | `active` | `"true"` 或 `"1"` 设置激活状态 |
 | `url` | 关联的网页地址 |
 | `dir` | 关联的目录路径 |
+| `locked` | `"true"` 或 `"1"` 锁定标签（不可关闭，关闭按钮隐藏） |
 
 ## C++ 接口
 
@@ -130,6 +131,8 @@ void SetUrl(const UIString& url);
 UIString GetUrl();
 void SetDir(const UIString& dir);
 UIString GetDir();
+void SetLocked(bool locked);
+bool IsLocked();
 Label* GetTitleLabel();           // 获取标题 Label（可定制样式）
 Label* GetCloseBtn();             // 获取关闭按钮 Label
 Rect GetCloseRect();              // 获取关闭按钮相对坐标矩形
@@ -176,6 +179,9 @@ if (activeTab) {
 // 查找标签
 int idx = tabBar->FindTabByTitle(L"主页");
 
+// 锁定/解锁标签
+m_tabBar->GetTab(0)->SetLocked(true);  // 主页锁定，不可关闭
+
 // 清空
 tabBar->RemoveAllTabs();
 ```
@@ -188,7 +194,7 @@ tabBar->RemoveAllTabs();
 
 | 操作 | 行为 |
 |------|------|
-| **左键按下 + 同位置弹起** | 激活该标签；若点击在关闭按钮上则关闭 |
+| **左键按下 + 同位置弹起** | 激活该标签；若点击在关闭按钮上则关闭（锁定标签忽略关闭操作） |
 | **左键按下 + 不同位置弹起** | 计算拖拽距离，滚动标签 |
 | **右键按下 + 弹起** | 交换两个标签位置 |
 | **鼠标移动** | 更新 hover 效果和关闭按钮高亮 |
@@ -274,3 +280,9 @@ if (closeRect.Contains(arg.Location)) { /* 关闭 */ }
 ### 6. 最小宽度限制
 
 所有宽度设置（TabBar::SetTabWidth、TabButton::SetButtonWidth、htm tab-width）都有最小 40 的限制。
+
+### 7. 标签锁定
+
+- `SetLocked(true)` 后关闭按钮自动隐藏，`RemoveTab` 跳过锁定标签
+- 锁定标签仍然可以右键交换位置
+- htm 中设置 `<tabbutton title="主页" locked="true">`
