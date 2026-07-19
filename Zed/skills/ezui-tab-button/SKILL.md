@@ -286,3 +286,9 @@ if (closeRect.Contains(arg.Location)) { /* 关闭 */ }
 - `SetLocked(true)` 后关闭按钮自动隐藏，`RemoveTab` 跳过锁定标签
 - 锁定标签仍然可以右键交换位置
 - htm 中设置 `<tabbutton title="主页" locked="true">`
+
+## TabButton 鼠标事件由 TabBar 代理
+
+TabButton 自身 `SetHitTestVisible(false)`，所有鼠标事件（hover、点击、拖拽）都在 **TabBar** 的 `OnMouseMove/OnMouseDown/OnMouseUp/OnMouseLeave` 中处理。
+
+因此 TabButton 的 `OnMouseEnter/OnMouseLeave` 虚函数不会被触发。hover 效果直接由 TabBar 设置 `Style.BackColor` 实现。
