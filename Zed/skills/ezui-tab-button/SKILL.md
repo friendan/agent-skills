@@ -287,6 +287,99 @@ if (closeRect.Contains(arg.Location)) { /* 关闭 */ }
 - 锁定标签仍然可以右键交换位置
 - htm 中设置 `<tabbutton title="主页" locked="true">`
 
+## TabButton 集成 SVG 图标
+
+TabButton 的标题文字和关闭按钮使用 Label 控件，EzUI 的 Label 支持通过属性直接设置 SVG 图标（`bsicon`/`lucide`/`iconpark`/`tabler-outline`/`tabler-filled`/`remixicon`）。
+
+### 标题标签显示 SVG 图标
+
+在动态创建 TabButton 时，可以直接给 `m_titleLabel` 设置图标属性：
+
+```cpp
+// C++ 中设置标题旁的图标
+tab->SetIcon(L"bsicon", L"globe");             // Bootstrap 地球图标
+tab->GetIcon().Size = 14;                       // 图标大小
+tab->GetIcon().Gap = 4;                         // 图标与文字间距
+tab->GetIcon().Visible = true;                  // 显示
+tab->Invalidate();                              // 刷新
+```
+
+> **注意**：图标颜色自动使用 Label 的当前文字色（`GetForeColor()`），active/inactive 切换时颜色自动跟随。
+
+### 关闭按钮使用 SVG 图标
+
+当前 TabButton 的关闭按钮使用 Unicode 字符 `✕` (`\u2715`) 作为图标。如需替换为 SVG 图标，有两种方式：
+
+#### 方式一：Label 属性直接设置（推荐）
+
+在 TabButton 构造函数中，将关闭按钮的文本改为空，设置 SVG 图标属性：
+
+```cpp
+m_closeBtn->SetText(L"");
+m_closeBtn->SetAttribute(L"bsicon", L"x");  // Bootstrap 的 x 图标
+m_closeBtn->GetIcon().Size = 10;
+m_closeBtn->GetIcon().Visible = true;
+```
+
+#### 方式二：使用 SvgBox 控件
+
+```cpp
+auto* closeIcon = new ezui::SvgBox(this);
+closeIcon->SetAttribute(L"bsicon", L"x");
+closeIcon->SetFixedWidth(20);
+closeIcon->SetHitTestVisible(false);
+closeIcon->EventEnabled = false;
+Add(closeIcon);
+```
+
+> **注意**：SvgBox 需要 `EventEnabled = false` 避免干扰事件处理，且关闭按钮的 hover 颜色变化需通过 `m_closeBtn->Style.ForeColor` 或 `SetTintColor` 实现。
+
+### htm 中使用 SVG 图标
+
+TabButton 是由 C++ 动态创建的，不会在 htm 中直接写 `<tabbutton>` 标签。但新建标签按钮等静态控件可直接在 htm 中使用图标属性：
+
+```html
+<!-- 新建标签按钮使用 + 图标 -->
+<label id="newTabBtn" text="+" width="30" height="36" font-size="16"></label>
+
+<!-- 如需 SVG 图标 -->
+<label id="newTabBtn" bsicon="plus-lg" icon-size="16" width="30" height="36"></label>
+```
+
+**htm 中 Label 的 SVG 图标属性**：
+
+| 属性 | 说明 |
+|------|------|
+| `bsicon` | Bootstrap Icons 图标名 |
+| `lucide` | Lucide Icons 图标名 |
+| `iconpark` | IconPark 图标名 |
+| `tabler-outline` | Tabler Icons Outline 风格 |
+| `tabler-filled` | Tabler Icons Filled 风格 |
+| `remixicon` | Remix Icon 图标名 |
+| `icon-size` | 图标大小，默认 16 |
+| `icon-gap` | 图标与文字间距，默认 4 |
+| `icon-side` | 图标位置，`left`（默认）或 `right` |
+
+### 踩坑记录
+
+#### 坑1：必须使用存在的 SVG 名称
+
+`bsicon="x"` 的图标名必须在对应的图标数据中存在。使用不存在的图标名时，编译可通过但运行时不显示。修改后需重新编译 EzUI 库使 gen_icons 生成的数据生效。
+
+可用图标浏览器 `bin/ui/htm/` 下的 `XXXIconsBrowser.htm` 查看所有可用图标名。
+
+#### 坑2：Label + SVG 需要触发重绘
+
+设置图标属性后必须调用 `Invalidate()` 触发重绘，否则图标不会显示。
+
+#### 坑3：图标颜色与文字颜色联动
+
+SVG 图标使用控件的 `GetForeColor()` 作为色调。TabButton 切换 active/inactive 时，`m_titleLabel->Style.ForeColor` 会变化，图标颜色自动跟随。无需额外处理。
+
+#### 坑4：关闭按钮 SVG 的 hover 变色
+
+当前关闭按钮用文本 `✕` 实现，hover 时改变 `Style.BackColor` 和 `Style.ForeColor`。如果换成 SvgBox，需要用 `SetTintColor` 或替换整个 SvgBox 控件来改变颜色，不如 Label 直接。因此**关闭按钮建议保持现有文本方式**。
+
 ## TabButton 鼠标事件由 TabBar 代理
 
 TabButton 自身 `SetHitTestVisible(false)`，所有鼠标事件（hover、点击、拖拽）都在 **TabBar** 的 `OnMouseMove/OnMouseDown/OnMouseUp/OnMouseLeave` 中处理。
