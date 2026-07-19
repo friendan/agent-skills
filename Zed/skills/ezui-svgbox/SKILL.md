@@ -88,23 +88,41 @@ ninja -C build_clang_ninja_debug gen_icons
 
 ### 用途
 
-将 SVG 图标目录中的所有 `.svg` 文件嵌入到 C++ 代码中，生成 `BootstrapIconsData.h` 和 `BootstrapIconsData.cpp`。
+将 SVG 图标目录中的所有 `.svg` 文件嵌入到 C++ 代码中，生成 `BootstrapIconsData.h`、`BootstrapIconsData.cpp` 以及图标浏览器 htm 文件。
 
 ### 用法
 
 ```bat
-gen_icons_dbg.exe <svg目录> <头文件输出目录> <cpp文件输出目录>
+gen_icons_dbg.exe <svg目录> <头文件输出目录> <cpp文件输出目录> <htm输出目录>
 ```
 
-示例（重新生成 Bootstrap Icons 数据）：
+第4个参数可选，指定后生成图标浏览器 htm 文件。
+
+示例（重新生成 Bootstrap Icons 数据 + htm 浏览器）：
 ```bat
-gen_icons_dbg.exe ../bootstrap/bootstrap-icons-1.13.1 ../src/include/EzUI ../src/sources
+gen_icons_dbg.exe ../bootstrap/bootstrap-icons-1.13.1 ../src/include/EzUI ../src/sources ../bin/ui/htm
 ```
+
+### 图标浏览器 htm
+
+gen_icons 工具会生成 `iconBrowser.htm`，按前缀分类展示所有图标（带分类标题行、每行8个图标），每个图标可点击复制名称到剪贴板：
+
+```html
+<vlayout width="120" action="copy" copy-text="search">
+    <svg width="28" height="28" event="none" data="..."></svg>
+    <label text="search" class="icon-name" event="none"></label>
+</vlayout>
+```
+
+- `action="copy"` — 点击后复制 `copy-text` 属性中的文本到剪贴板
+- `event="none"` — 让鼠标事件穿透到父容器
+- `cursor: pointer` — 鼠标移入变手型
+- `vlayout:hover` — 悬停高亮背景
 
 ### 添加新的 SVG 图标库
 
 1. 将新的 SVG 图标文件夹放到项目中
-2. 运行 `gen_icons_dbg.exe <新SVG目录> <输出头文件.h目录> <输出cpp文件.cpp目录>`
+2. 运行 `gen_icons_dbg.exe <新SVG目录> <输出头文件.h目录> <输出cpp文件.cpp目录> <htm输出目录>`
 3. 新建一个类（如 `MaterialIcons`）封装 `GetIcon` 接口，读取生成的 `g_materialIcons` 数据
 4. 在目标控件的 `SetAttribute` 中加对应的属性解析（如 `mdicon="home"`）
 5. **注意**：每次运行都会覆盖 `BootstrapIconsData.h/cpp`，不同图标库请使用不同的输出文件名
@@ -135,3 +153,25 @@ SvgBox 使用 **lunasvg 3.5.0**（MIT 协议）渲染 SVG：
 2. **按需渲染** — 控件每次绘制时实时渲染 SVG 到控件大小，自动缩放
 3. **色调支持** — 通过 `kind` 属性或 `SetTintColor` 直接修改 SVG 颜色
 4. **高性能** — lunasvg 每次 `OnPaint` 都重新渲染，适合图标这种小尺寸场景；如果 SVG 特别复杂可考虑缓存 D2D 位图
+
+## 踩坑记录
+
+### 坑1：lunasvg 静态链接符号找不到
+
+把 lunasvg 直接作为源码编译进 EzUI 时，需要在 CMakeLists.txt 中设置 `CXX_STANDARD 17`，并定义宏 `LUNASVG_BUILD`、`LUNASVG_BUILD_STATIC`、`PLUTOVG_BUILD`、`PLUTOVG_BUILD_STATIC`，否则头文件中的 `dllimport` 会导致链接错误。
+
+### 坑2：SvgBox 的鼠标事件穿透
+
+SVG 图标本身不需要响应鼠标事件。在 htm 中给 SVG 和文字标签加 `event="none"`，让鼠标事件穿透到父容器（`vlayout`）来触发 `action="copy"`。
+
+### 坑3：htm 中布尔属性必须带值
+
+EZUI 的 htm 解析器不支持无值属性（如 `<button disabled>`），必须写成 `disabled="true"` 才生效。
+
+### 坑4：Window::OnCopyCompleted 必须 public
+
+`OnCopyCompleted` 虚方法声明在 `Window` 中必须是 `public` 的，因为它在 `DefaultNotify` 全局函数中被调用，无法访问 `protected` 成员。
+
+### 坑5：图标浏览器窗口使用 htm 布局更简单
+
+不要尝试在 C++ 中动态创建 2000+ 个图标控件，慢且代码复杂。改为用 `gen_icons` 工具直接生成一个完整的 `iconBrowser.htm` 文件，C++ 只需 `LoadXml` 加载即可。
