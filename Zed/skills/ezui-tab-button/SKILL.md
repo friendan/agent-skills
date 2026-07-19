@@ -83,6 +83,30 @@ std::vector<bool> m_tabHover;       // hover 状态记录
 | `dir` | 关联的目录路径 |
 | `locked` | `"true"` 或 `"1"` 锁定标签（不可关闭，关闭按钮隐藏） |
 
+**TabButton 内建 SVG 图标支持**（继承自 Control 的图标机制）：
+
+```html
+<tabbutton title="主页" bsicon="person-arms-up"></tabbutton>
+<tabbutton title="搜索" lucide="search"></tabbutton>
+<tabbutton title="设置" tabler-outline="settings"></tabbutton>
+```
+
+| 图标属性 | 图标库 | 示例 |
+|---------|--------|------|
+| `bsicon` | Bootstrap Icons | `bsicon="person-arms-up"` |
+| `lucide` | Lucide Icons | `lucide="search"` |
+| `iconpark` | IconPark | `iconpark="user"` |
+| `tabler-outline` | Tabler Outline | `tabler-outline="home"` |
+| `tabler-filled` | Tabler Filled | `tabler-filled="star"` |
+| `remixicon` | Remix Icon | `remixicon="arrow-down-fill"` |
+| `icon-size` | 图标大小（默认16） | `icon-size="14"` |
+| `icon-gap` | 图标与文字间距（默认4） | `icon-gap="6"` |
+| `icon-side` | 图标位置 | `icon-side="right"` |
+
+> **说明**：图标颜色自动跟随标题文字颜色，active/inactive 切换时自动匹配。
+> **注意**：必须使用**存在的**图标名（即 gen_icons 已生成数据的图标），否则运行时图标不显示，编译不出错。
+> 可用 `bin/ui/htm/XXXIconsBrowser.htm` 查看所有可用图标。
+
 ## C++ 接口
 
 ### TabBar 接口
