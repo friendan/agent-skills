@@ -1,6 +1,6 @@
 ---
 name: ezui-toast
-description: 指导如何在EZUI框架中实现Toast通知功能，包括LayeredWindow方案、htm布局、kind色调、关闭按钮、拖动、堆叠定位等。
+description: 指导如何在EZUI框架中实现Toast通知功能，包括LayeredWindow方案、htm布局、kind色调、关闭按钮、拖动、堆叠定位、倒计时等。
 ---
 
 # EZUI Toast 通知实现
@@ -12,89 +12,127 @@ Toast 通知使用 `LayeredWindow`（分层窗口）实现，每个 Toast 是一
 ## 架构
 
 ```
-Toast::Show("保存成功")
-  → new ToastPopup (LayeredWindow)
-    → 拼接 htm 布局字符串
-    → UIManager::LoadXml + SetupUI 加载布局
-    → 设置窗口位置（右下角堆叠）
-    → Show()
+Toast::ShowSuccess("操作成功")
+  → CreateKindToast(ControlKind::Success, text, 3000)
+    → BuildToastHtm("success", escapedText)   // 用 snprintf 拼接 htm
+    → new ToastPopup (LayeredWindow)
+      → UIManager::LoadXml + SetupUI 加载布局
+      → SetupCloseBtn(popup)                   // 设置关闭按钮 hover 样式
+    → ShowAtBottomRight(popup, owner)          // 定位 + Show
+    → popup->StartTimer(3000)                  // 启动倒计时
 ```
 
-每个 Toast 是一个独立的分层窗口，不依赖于主窗口的控件树，避免了子控件在自定义容器中不被绘制的问题。
+每个 Toast 是一个独立的分层窗口，不依赖于主窗口的控件树。
 
 ## 完整 API
 
 ```cpp
-// 最简用法
-Toast::Show("保存成功");              // 默认 Info 风格
+// ===== 最简用法（带默认自动关闭时间） =====
+Toast::ShowSuccess("操作成功");       // 3s
+Toast::ShowDanger("删除失败");        // 5s
+Toast::ShowWarning("网络不稳定");     // 4s
+Toast::ShowInfo("你有新消息");        // 3s
 
-// 便捷方法（自动带对应 kind）
-Toast::ShowSuccess("操作已完成");
-Toast::ShowDanger("删除失败");
-Toast::ShowWarning("网络不稳定");
-Toast::ShowInfo("你有新消息");
+// ===== 自定义时长（毫秒），传 0 禁止自动关闭 =====
+Toast::ShowSuccess("操作成功", 2000);
+Toast::ShowDanger("删除失败", 0);     // 不自动关闭
+Toast::ShowWarning("网络延迟较高", 6000);
 
-// 带标题和正文
-Toast::Show("文件保存成功", "已保存到 D:\\report.pdf");
+// ===== 通用 Toast（通过 ToastOptions） =====
+Toast::Show("保存成功", ToastOptions().Kind(ControlKind::Primary).Duration(3000));
 
-// 完整配置（通过 ToastOptions）
-Toast::Show("操作失败", ToastOptions()
-    .Kind(ControlKind::Danger)
-    .Duration(3000)
-    .ShowClose(true)
-    .MinWidth(400)
-    .Align(ToastAlign::TopRight)
-);
+// ===== 关闭所有 =====
+Toast::DismissAll();
 ```
 
-## ToastOptions
+## 各风格默认自动关闭时间
 
-| 方法 | 说明 | 默认值 |
-|------|------|--------|
-| `Title(text)` | 标题文本 | 同 `text` 参数 |
-| `Text(text)` | 正文文本 | 空 |
-| `Kind(kind)` | 色调（Success/Danger/Warning/Info 等） | `Info` |
-| `Icon(lib, name)` | SVG 图标 | 无 |
-| `Duration(ms)` | 自动关闭毫秒数，0=不自动关闭 | 4000 |
-| `ShowClose(bool)` | 是否显示关闭按钮 | true |
-| `Animation(anim)` | 动画类型 | None |
-| `Align(align)` | 对齐位置 | BottomRight |
-| `Target(control)` | 相对于某个控件定位 | 无（相对主窗口） |
-| `MinWidth(w)` | 最小宽度 | 350 |
-| `MaxWidth(w)` | 最大宽度 | 600 |
+| 方法 | 默认时间 |
+|------|---------|
+| `ShowSuccess` | 3000ms |
+| `ShowDanger` | 5000ms |
+| `ShowWarning` | 4000ms |
+| `ShowInfo` | 3000ms |
 
-## HTM 布局
+传 `0` 禁止自动关闭：`Toast::ShowInfo("手动关闭", 0)`
 
-Toast 内部使用 htm 字符串布局，关键结构：
+## HTM 布局（BuildToastHtm）
 
-```html
-<vbox id="root" dock="fill" style="background-color: rgb(255,255,255); border: 1px solid rgba(0,0,0,0.12); border-radius: 8px;">
-    <hlayout id="toast-header" kind="success" dock="fill" action="title" style="padding-left: 14px; padding-right: 6px; border-radius: 8px;">
-        <spacer width="6"></spacer>
-        <label id="toastText" text="..." font-size="13" style="font-weight: bold;" action="title" valign="middle"></label>
-        <spacer width="star"></spacer>
-        <label id="toastCloseBtn" text="" width="22" height="22" bsicon="x-lg" icon-size="12" action="close" style="cursor: hand; border-radius: 4px;" valign="middle" halign="center"></label>
-    </hlayout>
-</vbox>
+使用 `snprintf` + 一个 `R"(...)"` 整体拼接，避免多个 R 片段：
+
+```cpp
+static std::string BuildToastHtm(const char* kindName, const std::string& textUtf8) {
+    char buf[2048];
+    snprintf(buf, sizeof(buf),
+        R"(<vbox id="root" dock="fill" style="background-color: rgb(255,255,255); border: 1px solid rgba(0,0,0,0.12); border-radius: 8px;">
+  <hlayout id="toast-header" kind="%s" dock="fill" action="title" style="padding-left: 14px; padding-right: 6px; border-radius: 8px;">
+    <spacer width="6"></spacer>
+    <label text="%s" font-size="13" style="font-weight: bold;" action="title" valign="middle"></label>
+    <spacer width="star"></spacer>
+    <label id="toastTimer" text="" width="30" font-size="11" style="color: rgba(255,255,255,0.7);" valign="middle" halign="center"></label>
+    <label id="toastCloseBtn" text="" width="22" height="22" bsicon="x-lg" icon-size="12" action="close" style="cursor: hand; border-radius: 4px;" valign="middle" halign="center"></label>
+  </hlayout>
+</vbox>)",
+        kindName, textUtf8.c_str());
+    return buf;
+}
 ```
 
 关键点：
-- **外部 vbox**：白色背景 + 边框 + 圆角
-- **header（hlayout）**：`kind="xxx"` 提供全局色调，`action="title"` 支持拖动
+- **外部 vbox**：白色背景 (`rgb(255,255,255)`) + 细边框 + 圆角
+- **header（hlayout）**：`kind="xxx"` 提供全局色调（按钮同款颜色），`action="title"` 支持拖动
 - **文字标签**：`action="title"` 使文字区域也可拖动
+- **倒计时标签**（`toastTimer`）：显示 `3s` `2s` `1s`，每秒更新
 - **关闭按钮**：`bsicon="x-lg"` 显示 SVG 关闭图标，`action="close"` 关闭窗口
 
 ## 关闭按钮 Hover 效果
 
-加载 htm 后通过 C++ 设置 HoverStyle：
+所有 kind 统一使用半透明黑色背景，在任何色调上都能看到变化：
 
 ```cpp
-auto* closeBtn = FindControl(L"toastCloseBtn");
-if (closeBtn) {
-    closeBtn->HoverStyle.BackColor = Color(220, 50, 50, 200); // 红色背景
-    closeBtn->HoverStyle.ForeColor = Color(255, 255, 255);   // 白色图标
+static void SetupCloseBtn(ToastPopup* popup) {
+    auto* btn = popup->FindControl(L"toastCloseBtn");
+    if (btn) {
+        btn->HoverStyle.BackColor = Color(0, 0, 0, 50);   // 半透明黑
+        btn->HoverStyle.ForeColor = Color(255, 255, 255); // 白色图标
+    }
 }
 ```
+
+## 倒计时实现
+
+```cpp
+void StartTimer(int ms) {
+    m_duration = ms;
+    m_remaining = ms;
+    if (m_duration <= 0) { /* 隐藏倒计时标签，不启动定时器 */ return; }
+    UpdateTimerLabel();  // 显示 "3s"
+    StartTick();
+}
+
+void StartTick() {
+    // 每秒触发一次
+    m_closeTimer->Tick = [this](Timer* t) {
+        t->Stop();
+        Sleep(1000);
+        m_remaining -= 1000;
+        if (m_remaining <= 0) {
+            BeginInvoke([this]() { Close(0); });  // 自动关闭
+        } else {
+            BeginInvoke([this]() {
+                UpdateTimerLabel();   // 更新 "2s" → "1s"
+                Invalidate();         // 强制刷新
+                StartTick();          // 启动下一秒
+            });
+        }
+    };
+    m_closeTimer->Start();
+}
+```
+
+- 使用链式 `StartTick` 每秒触发，不依赖 Timer 的 Interval 循环
+- UI 操作通过 `BeginInvoke` 投递到主线程
+- 调用 `Invalidate()` 确保 LayeredWindow 更新倒计时文本
 
 ## 窗口样式
 
@@ -111,24 +149,50 @@ LayeredWindow(w, h, owner, WS_POPUP,
 ## 堆叠定位
 
 ```cpp
-if (owner) {
-    RECT r;
-    GetWindowRect(owner, &r);
-    int x = r.right - w - 16;
-    int y = r.bottom - h - 16 - index * (h + 8);
-    popup->SetRect(Rect(x, y, w, h));
+static void ShowAtBottomRight(ToastPopup* popup, HWND owner) {
+    int w = popup->Width();
+    int h = popup->Height();
+    int index = (int)g_activeToasts.size();
+    g_activeToasts.push_back(popup);
+    if (owner) {
+        RECT r;
+        GetWindowRect(owner, &r);
+        int x = r.right - w - 16;
+        int y = r.bottom - h - 16 - index * (h + 8);
+        popup->SetRect(Rect(x, y, w, h));
+    }
+    popup->Show();
 }
 ```
 
 每次新 Toast 往上堆叠，间距 8px。
 
-## 实现步骤（新增 SVG 图标库流程对比）
+## 文本转义
+
+动态拼接 htm 时，文本中的 `& < > "` 需要转义：
+
+```cpp
+static std::string EscapeHtml(const std::wstring& text) {
+    std::wstring s = text;
+    size_t pos = 0;
+    while ((pos = s.find(L'&', pos)) != std::wstring::npos)  { s.replace(pos, 1, L"&amp;");  pos += 5; }
+    while ((pos = s.find(L'<', pos)) != std::wstring::npos)  { s.replace(pos, 1, L"&lt;");   pos += 4; }
+    while ((pos = s.find(L'>', pos)) != std::wstring::npos)  { s.replace(pos, 1, L"&gt;");   pos += 4; }
+    while ((pos = s.find(L'"', pos)) != std::wstring::npos)  { s.replace(pos, 1, L"&quot;"); pos += 6; }
+    std::string utf8;
+    ui_text::UnicodeToUTF8(s, &utf8);
+    return utf8;
+}
+```
+
+## 实现步骤
 
 1. 创建 `ToastPopup` 继承 `LayeredWindow`
-2. 构造函数中拼接 htm 布局字符串
+2. 用 `BuildToastHtm` 拼接 htm 布局（`snprintf` + 一个 `R"(...)"`）
 3. 通过 `GetFrame()->GetUIManager()` 加载 htm
-4. 在 `OnPaint` 中**不要画** LayeredWindow 边缘的内容（避免黑边）
-5. `Toast::Show` 静态方法创建 `ToastPopup` 并显示
+4. 设置关闭按钮 HoverStyle
+5. 定位到右下角并 Show
+6. 启动倒计时（链式 StartTick）
 
 ## 踩坑记录
 
@@ -136,74 +200,53 @@ if (owner) {
 
 最早尝试把 Toast 作为 Control 添加到 Window 的 `m_toastLayer`（一个普通 Control），但子控件（Label）完全不显示。
 
-**原因**：`m_toastLayer` 是一个独立的 Control，没有加到控件树中，虽然 `Window::OnPaint` 中调用了 `SendEvent(m_toastLayer, arg)`，但子控件的递归绘制链可能因为缺少 Parent 或 Frame 引用而断裂。即使手动调用了 `OnChildPaint`，子控件的 `OnPaintBefore` 中的裁剪计算也可能出错。
+**原因**：`m_toastLayer` 没有加到控件树中，子控件的递归绘制链因缺少 Parent 或 Frame 引用而断裂。
 
-**解决方案**：改用独立窗口（LayeredWindow），每个 Toast 是一个独立的窗口，自己的控件树完整。
+**解决方案**：改用独立窗口（LayeredWindow），每个 Toast 是独立窗口，控件树完整。
 
-### 坑2：Label 子控件不显示文字
+### 坑2：`WS_EX_TRANSPARENT` 导致鼠标事件穿透
 
-即使把 Toast 加到 IFrame 中，Label 子控件也不显示文字。
+关闭按钮点击无反应。
 
-**原因**：Label 依赖框架的布局和绘制链。在 `Toast::OnPaint` 中如果重写了 `OnPaint` 但没有调用 `Control::OnPaint(args)`，子控件的 `OnChildPaint` 虽然会被 `OnPaintBefore` 调用，但 `OnBackgroundPaint` 和 `OnForePaint` 不会被调用，导致 Label 的文字绘制缺失。
+**原因**：`WS_EX_TRANSPARENT` 让鼠标事件穿透。
 
-**解决方案**：用 htm 布局加载控件，让框架完整处理子控件的创建和绘制链。
+**解决方案**：去掉 `WS_EX_TRANSPARENT`。
 
-### 坑3：`WS_EX_TRANSPARENT` 导致鼠标事件穿透
+### 坑3：LayeredWindow 边缘出现黑边
 
-最初的 LayeredWindow 加了 `WS_EX_TRANSPARENT` 样式，导致关闭按钮点击无反应。
+`OnPaint` 中绘制阴影边框后，拖动窗口边缘出现黑线。
 
-**原因**：`WS_EX_TRANSPARENT` 让窗口透明，鼠标事件穿透到下层窗口。
+**原因**：LayeredWindow 只绘制客户区内内容，边框抗锯齿像素在边缘外显示为黑边。
 
-**解决方案**：去掉 `WS_EX_TRANSPARENT`，改为只加 `WS_EX_NOACTIVATE`（不抢焦点）。
+**解决方案**：不在 `OnPaint` 中画任何边框，由 htm 的 `border` 样式提供。
 
-### 坑4：LayeredWindow 边缘出现黑边
+### 坑4：Timer 线程安全问题
 
-在 `OnPaint` 中绘制多层阴影边框（`DrawRectangle` 在窗口边缘外），拖动窗口后边缘出现黑线。
+`Timer::Tick` 在子线程中执行，直接操作 UI 导致崩溃。
 
-**原因**：LayeredWindow 只绘制客户区内的内容，阴影边框的抗锯齿像素在窗口边缘外显示为黑边。
+**解决方案**：使用 `BeginInvoke()` 将 UI 操作投递到主线程。
 
-**解决方案**：不在 `OnPaint` 中画任何内容，完全由 htm 中的 vbox 样式的 `border` 属性提供边框。
+### 坑5：htm 文本未转义导致布局错乱
 
-### 坑5：action="close" 在 LayeredWindow 中无效
+文本中的 `& < > "` 导致 htm 解析错误。
 
-直接用 `action="close"` 的 Label 无法关闭窗口。
+**解决方案**：用 `EscapeHtml` 手动转义。
 
-**原因**：LayeredWindow 的事件处理链可能没有正确传递 `Close` action。实际上经过测试，去掉 `WS_EX_TRANSPARENT` 后 `action="close"` 可以正常工作。
+### 坑6：LayeredWindow 加载 htm 需用 UIManager
 
-**解决方案**：确保窗口不带 `WS_EX_TRANSPARENT`，Label 使用 `action="close"` 即可。
+`LayeredWindow` 没有 `LoadXmlFromString` 方法。
 
-### 坑6：C++ lambda 回调中 Timer 线程安全问题
-
-如果使用 `Timer` 做自动关闭，`Timer::Tick` 在子线程中执行，直接调用 UI 操作（如 `SetOpacity`、`Dismiss`）会导致崩溃。
-
-**解决方案**：使用 `BeginInvoke()` 或 `PostMessage` 将 UI 操作投递到主线程执行。或者直接不用 Timer，让用户手动关闭。
-
-### 坑7：UIText 拼接 operator+ 问题
-
-`UIString`（即 `ui_text::String`）没有重载 `operator+`，不能直接用 `str1 + str2`。
-
-**解决方案**：用 `.unicode()` 转 `std::wstring` 拼接，再用 `UIString(wstr)` 构造。
-
-### 坑8：htm 布局文本需要转义
-
-动态拼接 htm 时，文本内容中的 `& < > "` 需要转义为实体，否则 htm 解析会出错或被截断。
-
-**解决方案**：手动 replace 转义：
-```cpp
-text.replace(L"&", L"&amp;");
-text.replace(L"<", L"&lt;");
-text.replace(L">", L"&gt;");
-text.replace(L"\"", L"&quot;");
-```
-
-### 坑9：LayeredWindow 的 htm 布局要用 UIManager 加载
-
-`LayeredWindow` 没有 `LoadXmlFromString` 方法，需要手动通过 `GetFrame()->GetUIManager()` 加载：
-
+**解决方案**：
 ```cpp
 auto* umg = GetFrame()->GetUIManager();
-std::string htmUtf8;
-UnicodeToUTF8(htmWString, &htmUtf8);
 umg->LoadXml(htmUtf8.c_str(), htmUtf8.size());
 umg->SetupUI(GetFrame());
 ```
+
+### 坑7：倒计时不实时更新
+
+倒计时标签只在鼠标移入窗口时才更新。
+
+**原因**：`BeginInvoke` 投递的 UI 更新需要 `Invalidate()` 触发 LayeredWindow 重绘。
+
+**解决方案**：在更新标签后调用 `Invalidate()`。
