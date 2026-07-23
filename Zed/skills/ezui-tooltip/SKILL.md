@@ -2,72 +2,128 @@
 
 ## 概述
 
-Tooltip 使用 `LayeredWindow`（分层窗口）实现，是一个独立无焦点小窗口。内部通过内存 htm 布局加载控件，利用框架的 `kind` 色调体系和 `width="auto"` 自适应宽度。
+Tooltip 使用 `LayeredWindow`（分层窗口）实现，是一个独立无焦点小窗口。内部通过内存 htm 布局加载控件，利用框架的 `kind` 色调体系、`width="auto"` 自适应宽度，以及 `SetAutoWidth` + `RefreshLayout` 实现窗口大小自适应。
 
 ## 完整 API
 
-```cpp
-// ===== 设置 Tooltip =====
-Tooltip::Set(ctl, L"提示文本");                             // 默认 secondary 颜色
-Tooltip::Set(ctl, L"保存成功", L"success");                 // 指定 kind 颜色
-Tooltip::Set(ctl, L"删除失败", L"danger");
+### C++ 用法
 
-// ===== 移除 Tooltip =====
+```cpp
+// ===== 基础设置（在 Control 基类上） =====
+btn->SetToolTip(L"提示文本");                              // 设文字
+btn->GetToolTip().Kind = L"success";                       // 设颜色
+btn->GetToolTip().AutoHideDelayMs = 3000;                  // 3秒后自动隐藏
+btn->GetToolTip().MaxWidth = 500;                          // 最大宽度
+btn->GetToolTip().Offset = { 20, 20 };                     // 鼠标偏移
+btn->GetToolTip().ExtraStyle = L"border-radius: 10px;";    // 额外样式
+
+// 一次性设置全部
+TooltipData& td = btn->GetToolTip();
+td.Text = L"保存成功";
+td.Kind = L"success";
+td.AutoHideDelayMs = 3000;
+```
+
+### htm 属性
+
+```html
+<!-- 简单用法 -->
+<button tooltip="提示文字"></button>
+
+<!-- 带颜色 -->
+<button tooltip="保存成功" tooltip-kind="success"></button>
+<button tooltip="删除危险" tooltip-kind="danger"></button>
+
+<!-- 自定义样式 -->
+<button tooltip="自定义" tooltip-kind="primary" tooltip-style="border-radius: 10px;"></button>
+```
+
+| htm 属性 | 说明 |
+|----------|------|
+| `tooltip` | 提示文字 |
+| `tooltip-kind` | 颜色主题（success/danger/warning/info/primary/secondary/dark/light） |
+| `tooltip-style` | 额外内联样式，如 `border-radius: 10px;` |
+
+### 全局 API
+
+```cpp
+// Set tooltip for a control
+Tooltip::Set(ctl, L"文本", L"success");
+Tooltip::Set(ctl, opts);                            // 用 TooltipOptions
+
+// Remove
 Tooltip::Remove(ctl);
 
-// ===== 清空所有 =====
+// Show/Hide
+Tooltip::Show(opts, text, screenX, screenY, owner);
+Tooltip::Hide();
+
+// Clear all
 Tooltip::ClearAll();
 ```
 
-Tooltip 通过 `Control::SetToolTip()` 设置文字，`Window::OnMouseHover` 自动触发显示：
+### 各风格默认自动隐藏时间
 
-```cpp
-btn->SetToolTip(L"点我保存");              // 设文字
-// 或配合 Tooltip::Set 指定颜色
-Tooltip::Set(btn, L"点我保存", L"success");
-```
+| 方法 | 默认 auto-hide |
+|------|---------------|
+| 默认 | 0（不自动隐藏，鼠标离开时隐藏） |
+
+传 `AutoHideDelayMs > 0` 启用自动隐藏：`td.AutoHideDelayMs = 3000;`
 
 ## 架构
 
 ```
-鼠标悬停 500ms
-  → Window::WndProc(WM_MOUSEHOVER)
-    → Window::OnMouseHover(point)
-      → HitTestControl 找到控件
-      → SendEvent(ctl, OnMouseHover)
-      → ctl->GetToolTip() 非空 → Tooltip::Show(ctl, screenX, screenY, ownerHwnd)
+鼠标进入控件
+  → Control::OnMouseEnter
+    → 启动 Timer（延迟 500ms）
+    → Timer 触发 → Tooltip::Show(opts, text, screenX, screenY, owner)
+    
+鼠标离开控件
+  → Control::OnMouseLeave
+    → 停止 Timer
+    → Tooltip::Hide()
 
 Tooltip::Show 内部：
-  → DestroyCurrentTooltip()          // 隐藏并异步销毁旧的
-  → BuildTooltipHtm(kind, text)      // 拼接 htm
-  → new TooltipPopup(600, 30, ...)   // 创建大窗口让布局不受限
+  → 如果已显示同个 tooltip，只 reposition 不重建
+  → DestroyCurrentTooltip()           // 隐藏并异步销毁旧的
+  → BuildTooltipHtm(kind, text, maxWidth, extraStyle)
+  → new TooltipPopup(600, 30, ...)    // 大窗口让布局不受限
     → LoadXml + SetupUI
-  → root->SetAutoWidth(true)         // 让 hlayout 自适应内容宽度
-  → root->RefreshLayout()            // 强制计算
+  → root->Style.Border.Radius = 6     // 设置圆角（和普通控件一样）
+  → root->Style.Border.Color = bgColor
+  → root->SetAutoWidth(true)
+  → root->RefreshLayout()             // 强制计算
   → root->Width() 获取实际宽度
   → SetRect 调整窗口到实际大小
+  → SetWindowRgn 设置圆角窗口区域
   → Show()
+  → StartAutoHideTimer (如果配置了)
 ```
+
+和 Toast 的最大区别：**由 Control 基类的 `OnMouseEnter`/`OnMouseLeave` 驱动**，不依赖 Window 的 `WM_MOUSEHOVER`。
 
 ## HTM 布局
 
 ```cpp
-static std::string BuildTooltipHtm(const std::string& kindName, const std::string& escapedText) {
+static std::string BuildTooltipHtm(const std::string& kindName, const std::string& escapedText,
+    int maxWidth, const std::string& extraStyle) {
     char b[2048];
+    std::string htmStyle = extraStyle.empty() ? "border-radius: 6px;" : extraStyle;
     snprintf(b, sizeof(b),
-        R"(<hlayout dock="fill" kind="%s" style="border-radius: 6px;">
+        R"(<hlayout dock="fill" kind="%s" style="%s">
   <spacer width="8"></spacer>
-  <label text="%s" font-size="12" halign="left" width="auto"></label>
+  <label text="%s" font-size="12" halign="left" width="auto" max-width="%d"></label>
   <spacer width="8"></spacer>
-</hlayout>)", kindName.c_str(), escapedText.c_str());
+</hlayout>)", kindName.c_str(), htmStyle.c_str(), escapedText.c_str(), maxWidth);
     return b;
 }
 ```
 
 关键点：
 - **hlayout**：`kind="%s"` 提供全局色调（与按钮同款颜色），`dock="fill"` 撑满 IFrame
-- **spacer**：左右各 8px 边距
-- **label**：`width="auto"` 自适应文字宽度，`halign="left"` 左对齐
+- **spacer**：左右各 8px 边距，避免文字贴边
+- **label**：`width="auto"` 自适应文字宽度，`halign="left"` 左对齐，`max-width` 限制最大宽度
+- **style**：默认 `border-radius: 6px;`，可通过 `extraStyle` 覆盖
 
 ## 窗口样式
 
@@ -80,11 +136,56 @@ LayeredWindow(w, h, owner, WS_POPUP,
 - `WS_EX_LAYERED` — 分层窗口，支持透明
 - `WS_EX_TOOLWINDOW` — 不在任务栏显示
 - `WS_EX_TRANSPARENT` — 鼠标穿透，避免 tooltip 盖在控件上导致闪烁
-- `SetShadow(0)` — 关闭阴影，消除白边
+- `SetShadow(0)` — 关闭阴影边框，消除白边
+
+## Control 基类集成
+
+Tooltip 逻辑内置在 `Control` 基类中，所有控件自动获得 tooltip 功能：
+
+```cpp
+// Control.h — 成员变量
+TooltipData m_tooltip;        // Tooltip 配置
+Timer* m_tooltipTimer;        // 延迟显示定时器
+
+// Control.cpp — OnMouseEnter
+void Control::OnMouseEnter(const MouseEventArgs& args) {
+    this->Invalidate();
+    if (!m_tooltip.Text.empty() && m_hWnd) {
+        if (!m_tooltipTimer) {
+            m_tooltipTimer = new Timer;
+            m_tooltipTimer->Interval = 0;
+            m_tooltipTimer->Tick = [this](Timer* t) {
+                t->Stop();
+                Sleep(m_tooltip.ShowDelayMs > 0 ? m_tooltip.ShowDelayMs : 500);
+                BeginInvoke([this]() {
+                    if (!m_tooltip.Text.empty()) {
+                        POINT pt; ::GetCursorPos(&pt);
+                        IFrame* f = GetFrame();
+                        HWND owner = f ? f->Hwnd() : m_hWnd;
+                        TooltipOptions opts;
+                        opts.Kind = m_tooltip.Kind;
+                        opts.AutoHideDelayMs = m_tooltip.AutoHideDelayMs;
+                        opts.MaxWidth = m_tooltip.MaxWidth;
+                        opts.Offset = m_tooltip.Offset;
+                        opts.ExtraStyle = m_tooltip.ExtraStyle;
+                        Tooltip::Show(opts, m_tooltip.Text, pt.x, pt.y, owner);
+                    }
+                });
+            };
+        }
+        m_tooltipTimer->Start();
+    }
+}
+
+// Control.cpp — OnMouseLeave
+void Control::OnMouseLeave(const MouseEventArgs& args) {
+    this->Invalidate();
+    if (m_tooltipTimer) m_tooltipTimer->Stop();
+    if (!m_tooltip.Text.empty()) Tooltip::Hide();
+}
+```
 
 ## 宽度自适应核心代码
-
-创建 TooltipPopup 后，拿到根控件（hlayout）主动设置 auto 并强制布局：
 
 ```cpp
 g_tooltipPopup = new TooltipPopup(600, 30, owner, htm);
@@ -94,30 +195,71 @@ auto& children = g_tooltipPopup->GetFrame()->GetControls();
 if (!children.empty()) {
     auto* root = *children.begin();
     if (root) {
+        // 设置圆角边框（和普通控件一样）
+        root->Style.Border.Radius = 6;
+        root->Style.Border.Color = root->GetBackColor();
+        root->Style.Border.Left = root->Style.Border.Top =
+        root->Style.Border.Right = root->Style.Border.Bottom = 1;
+
         root->SetAutoWidth(true);
         root->SetAutoHeight(true);
         root->RefreshLayout();
         int rw = root->Width();
         int rh = root->Height();
         if (rw > 20 && rh > 10) {
-            popupW = rw;
+            popupW = min(rw, opts.MaxWidth + 16);
             popupH = rh;
         }
     }
 }
-// 用计算出的实际大小设置窗口
+
 g_tooltipPopup->SetRect(Rect(x, y, popupW, popupH));
 g_tooltipPopup->Show();
 ```
 
 **重要**：初始窗口要够大（如 600x30），让布局计算不受容器宽度限制。之后 resize 到实际内容大小。
 
+## 圆角实现
+
+EZUI 中 `border-radius` 只影响边框线的绘制（`OnBorderPaint`），背景始终是 `FillRectangle` 填满整个矩形。要同时让背景有圆角，需要：
+
+1. 设置 `root->Style.Border.Radius = 6` — 让边框线绘制时带圆角
+2. 设置 `root->Style.Border.Color = root->GetBackColor()` — 让边框线和背景色一致（视觉上就像背景也有圆角）
+3. 设置 `border-width = 1` — 边框线宽度 1px
+
+这样圆角效果和框架中按钮等控件的圆角效果完全一致，没有 `SetWindowRgn` 的锯齿问题。
+
+## 控件数据结构
+
+```cpp
+// Control.h — TooltipData 结构
+struct UI_EXPORT TooltipData {
+    UIString Text;
+    UIString Kind = L"secondary";
+    UIString ExtraStyle;          // 额外的 htm style
+    int ShowDelayMs = 500;
+    int AutoHideDelayMs = 0;      // 0 = 不自动隐藏
+    int MaxWidth = 400;
+    Point Offset = { 12, 20 };
+};
+
+// Tooltip.h — TooltipOptions（同字段）
+struct UI_EXPORT TooltipOptions {
+    UIString Kind = L"secondary";
+    UIString ExtraStyle;
+    int ShowDelayMs = 500;
+    int AutoHideDelayMs = 0;
+    int MaxWidth = 400;
+    Point Offset = { 12, 20 };
+};
+```
+
 ## 异步销毁
 
 和 Toast 完全相同的模式——不在 WndProc 中销毁窗口：
 
 ```cpp
-// WndProc(WM_CLOSE) 中：
+// TooltipPopup::WndProc(WM_CLOSE) 中：
 ::ShowWindow(Hwnd(), SW_HIDE);
 ::PostMessage(__EzUI_MessageWnd, WM_GUI_SYSTEM, WM_GUI_TOOLTIP_CLEANUP, (LPARAM)this);
 return 0;
@@ -134,12 +276,13 @@ else if (wParam == WM_GUI_TOOLTIP_CLEANUP) {
 
 | 文件 | 内容 |
 |------|------|
-| `src/sources/Tooltip.cpp` | `TooltipPopup` 类、`Tooltip` 静态 API |
-| `src/include/EzUI/Tooltip.h` | `Tooltip` 类声明 |
+| `src/sources/Tooltip.cpp` | `TooltipPopup` 类、`Tooltip` 静态 API、`BuildTooltipHtm` |
+| `src/include/EzUI/Tooltip.h` | `TooltipOptions`、`Tooltip` 类声明 |
+| `src/sources/Control.cpp` | `OnMouseEnter`/`OnMouseLeave` 集成 tooltip |
+| `src/include/EzUI/Control.h` | `TooltipData`、`m_tooltip`、`m_tooltipTimer` |
 | `src/include/EzUI/UIDef.h` | `WM_GUI_TOOLTIP_CLEANUP` 宏定义 |
 | `src/sources/Application.cpp` | 消息窗口处理 `WM_GUI_TOOLTIP_CLEANUP` |
-| `src/sources/Window.cpp` | `Window::OnMouseHover` 触发 `Tooltip::Show` |
-| `src/include/EzUI/Control.h` | `m_tooltip` / `SetToolTip()` / `GetToolTip()` |
+| `src/sources/Window.cpp` | `Tooltip::Hide()` 调用（控件切换时） |
 
 ## 踩坑记录
 
@@ -153,53 +296,60 @@ else if (wParam == WM_GUI_TOOLTIP_CLEANUP) {
 
 **现象**：鼠标移到按钮上，Tooltip 出现后闪烁不停。
 
-**原因**：Tooltip 窗口盖在按钮上，鼠标移到 Tooltip 上触发按钮的 `OnMouseLeave` → `Tooltip::Hide()`，Tooltip 消失后鼠标回到按钮 → `OnMouseEnter` → `OnMouseHover` → 再次 `Tooltip::Show`，循环往复。
+**原因**：Tooltip 窗口盖在按钮上，鼠标移到 Tooltip 上触发按钮的 `OnMouseLeave` → `Tooltip::Hide()`，Tooltip 消失后鼠标回到按钮 → 再次触发进入 → 再次显示。
 
-**解决方案一**（推荐）：加 `WS_EX_TRANSPARENT` 让鼠标穿透 Tooltip，鼠标事件直接透到主窗口的按钮上。
-
-**解决方案二**（代码防护）：`Tooltip::Show` 开头判断如果已经显示且未销毁，只 reposition 不重建：
-```cpp
-if (g_tooltipPopup && !g_tooltipPopup->m_dismissed) {
-    // 只更新位置，不销毁重建
-    g_tooltipPopup->SetRect(Rect(x, y, w, h));
-    return;
-}
-```
+**解决方案**：
+1. **`WS_EX_TRANSPARENT`**（主要）：让鼠标穿透 Tooltip，鼠标事件直接到主窗口
+2. **Tooltip::Show 中的保护**：如果已显示未销毁，只 reposition 不重建
 
 ### ❗坑3：宽度不自适应
 
 **现象**：Tooltip 宽度固定，文字多时显示不全，文字少时太宽。
 
-**原因**：创建 TooltipPopup 时初始窗口大小固定（如 280px），hlayout 的 `dock="fill"` 撑满父容器（280px），label 的 `width="auto"` 虽然计算了文字宽度，但父容器 hlayout 宽度不会自动收缩。
-
 **尝试过的错误方案**：
 
 | 方案 | 结果 |
 |------|------|
-| label 设 `width="auto"`，窗口固定 280px | 宽内容显示不全 |
-| label 设 `width="auto"` + GDI 计算文本像素宽度 | 和 EZUI 布局的文本宽度不一致，总是差一些 |
-| `GetLayout()->Width()` 获取宽度 | 返回的是 hlayout 宽度（即窗口宽度），不是内容宽度 |
-| `FindControl` 找 label 拿 Width | label 宽度虽是 auto 但容器宽度限制导致计算结果不对 |
+| label 设 `width="auto"`，窗口固定 280px | 长内容显示不全 |
+| GDI 计算文本像素宽度 | 和 EZUI 布局的文本宽度不一致 |
+| `GetLayout()->Width()` | 返回的是容器宽度，不是内容宽度 |
+| `FindControl` 找 label 拿 Width | 容器宽度限制导致 label 宽度计算错误 |
 
 **最终解决方案**：
 1. 创建足够大的初始窗口（600x30），让布局不受容器宽度限制
-2. 获取根控件（hlayout），主动调用 `SetAutoWidth(true)` + `RefreshLayout()`
-3. hlayout 的 `RefreshLayout` 递归计算时，label 的 auto 宽度不受限于父容器（`IsAutoWidth()` 时 `maxWidth = EZUI_FLOAT_MAX`），hlayout 自己也会根据子控件总宽度 auto 计算出正确大小
-4. 用 `root->Width()` 拿到 hlayout 的实际内容宽度，resize 窗口
+2. 对 root 设 `SetAutoWidth(true)` + `RefreshLayout()`
+3. `root->Width()` 获取自适应后的实际宽度，resize 窗口
 
-关键代码：
+### ❗坑4：圆角不生效
+
+**现象**：border-radius 设了但看不到圆角。
+
+**原因**：EZUI 中 `border-radius` 只影响边框线的绘制（`OnBorderPaint`），而边框线的绘制需要 `border.Color != 0` 且 `border.Left/Top/Right/Bottom > 0`。只设 `style="border-radius: 6px"` 时颜色为透明、宽度为 0，边框线不会绘制，圆角没有视觉效果。
+
+**解决**：在 C++ 中设：
 ```cpp
-root->SetAutoWidth(true);
-root->SetAutoHeight(true);
-root->RefreshLayout();
-int rw = root->Width();
-int rh = root->Height();
+root->Style.Border.Radius = 6;
+root->Style.Border.Color = root->GetBackColor();  // 和背景色一致
+root->Style.Border.Left = root->Style.Border.Top =
+root->Style.Border.Right = root->Style.Border.Bottom = 1;
 ```
 
-### 坑4：右侧白色方块
+**错误方案**：用 `SetWindowRgn` 做窗口级别圆角——锯齿严重。
+
+### 坑5：右侧白色方块
 
 **现象**：Tooltip 窗口右侧或底部有白色区域。
 
-**原因**：初始窗口（600x30）的 `m_winBitmap` 位图大小是 600x30，resize 后旧的位图残留白色。
+**解决**：`SetRect` 触发 `LayeredWindow::OnSize` 重新创建位图，同时 `SetShadow(0)` 关闭阴影边框。
 
-**解决**：`SetRect` 调用 `::MoveWindow` 触发 `WM_SIZE` → `LayeredWindow::OnSize` → 删除旧位图创建新位图。所以不是真问题。如果有白边，检查 `BorderlessWindow` 的 `ShadowBox` 阴影窗口，用 `SetShadow(0)` 关闭。
+### 坑6：多种触发方案的选择
+
+最初在 `Window::OnMouseHover` 中触发，但逻辑复杂（需要处理同一个控件 auto-hide 后不重复触发的问题）。最终改为 **`Control::OnMouseEnter`/`OnMouseLeave` 驱动**，每个控件天然自带 tooltip，鼠标离开控件自动取消延迟和隐藏，无需额外状态管理。
+
+### 坑7：Timer 子线程访问 UI
+
+`Timer` 在子线程运行，需要在 Tick 中用 `BeginInvoke` 投递到主线程执行 UI 操作（`Tooltip::Show`）。
+
+### 坑8：`TooltipOptions` 和 `TooltipData` 分离
+
+两个结构体字段相同，用途不同：`TooltipData` 是 Control 成员的配置，`TooltipOptions` 是 `Tooltip::Show` 的参数。`Control::OnMouseEnter` 中需要把 `TooltipData` 转换成 `TooltipOptions` 再传给 `Tooltip::Show`。
