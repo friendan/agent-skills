@@ -1,3 +1,8 @@
+---
+name: ezui-toast
+description: 指导如何使用EZUI框架的Toast通知功能，包括创建定时关闭、不同颜色主题、屏幕位置、倒计时显示、拖拽、堆叠管理等。
+---
+
 # EZUI Toast 通知实现
 
 ## 概述

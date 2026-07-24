@@ -1,3 +1,8 @@
+---
+name: ezui-tooltip
+description: 指导如何使用EZUI框架的Tooltip提示功能，包括htm内存布局、自适应宽度、圆角窗口、显示位置、定时隐藏等。
+---
+
 # EZUI Tooltip 提示实现
 
 ## 概述
@@ -27,22 +32,41 @@ td.AutoHideDelayMs = 3000;
 ### htm 属性
 
 ```html
-<!-- 简单用法 -->
-<button tooltip="提示文字"></button>
+<!-- 基础用法 -->
+<button tooltip="保存成功"></button>
+<button tooltip="危险" tooltip-kind="danger"></button>
 
-<!-- 带颜色 -->
-<button tooltip="保存成功" tooltip-kind="success"></button>
-<button tooltip="删除危险" tooltip-kind="danger"></button>
+<!-- 显示位置 -->
+<button tooltip="右侧显示" tooltip-placement="right"></button>
+<button tooltip="上方显示" tooltip-placement="top"></button>
+<button tooltip="下方显示" tooltip-placement="bottom"></button>
+<button tooltip="左侧显示" tooltip-placement="left"></button>
 
-<!-- 自定义样式 -->
-<button tooltip="自定义" tooltip-kind="primary" tooltip-style="border-radius: 10px;"></button>
+<!-- 自动隐藏 -->
+<button tooltip="3秒后消失" tooltip-hide="3000"></button>
+
+<!-- 最大宽度 -->
+<button tooltip="长文本" tooltip-maxwidth="200"></button>
+
+<!-- 显示延迟 -->
+<button tooltip="1秒后才显示" tooltip-delay="1000"></button>
+
+<!-- 自定义圆角 -->
+<button tooltip="大圆角" tooltip-style="border-radius: 12px;"></button>
+
+<!-- 组合使用 -->
+<button tooltip="保存成功" tooltip-kind="success" tooltip-placement="bottom" tooltip-hide="3000"></button>
 ```
 
-| htm 属性 | 说明 |
-|----------|------|
-| `tooltip` | 提示文字 |
-| `tooltip-kind` | 颜色主题（success/danger/warning/info/primary/secondary/dark/light） |
-| `tooltip-style` | 额外内联样式，如 `border-radius: 10px;` |
+| htm 属性 | 说明 | 可选值 |
+|----------|------|-------|
+| `tooltip` | 提示文字 | 任意文本 |
+| `tooltip-kind` | 颜色主题 | success/danger/warning/info/primary/secondary/dark/light |
+| `tooltip-placement` | 显示位置 | mouse（默认）/top/bottom/left/right |
+| `tooltip-hide` | 自动隐藏时间（毫秒） | 数字，0=不自动隐藏 |
+| `tooltip-maxwidth` | 最大宽度（像素） | 数字 |
+| `tooltip-delay` | 显示延迟（毫秒） | 数字，默认500 |
+| `tooltip-style` | 额外内联样式 | CSS 样式字符串 |
 
 ### 全局 API
 
