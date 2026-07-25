@@ -122,8 +122,9 @@ TabButton* AddTab(const UIString& title);                              // 追加
 TabButton* InsertTab(int index, const UIString& title);                // 插入标签到指定位置
 void RemoveTab(int index);                                             // 按索引删除
 void RemoveTab(TabButton* tab);                                        // 按指针删除
-void RemoveAllTabs();                                                  // 清空所有标签
-int GetTabCount();                                                     // 标签数量
+	void RemoveAllTabs();                                                  // 清空所有标签
+	void RemoveUnlockedTabs();                                             // 删除所有非锁定标签（保留 locked 标签）
+	int GetTabCount();																		 // 标签数量
 TabButton* GetTab(int index);                                          // 按索引获取
 int GetTabIndex(TabButton* tab);                                       // 获取索引
 int FindTabByTitle(const UIString& title);                             // 按标题查找
@@ -400,9 +401,34 @@ TabButton 是由 C++ 动态创建的，不会在 htm 中直接写 `<tabbutton>` 
 
 SVG 图标使用控件的 `GetForeColor()` 作为色调。TabButton 切换 active/inactive 时，`m_titleLabel->Style.ForeColor` 会变化，图标颜色自动跟随。无需额外处理。
 
-#### 坑4：关闭按钮 SVG 的 hover 变色
+	#### 坑4：关闭按钮 SVG 的 hover 变色
 
-当前关闭按钮用文本 `✕` 实现，hover 时改变 `Style.BackColor` 和 `Style.ForeColor`。如果换成 SvgBox，需要用 `SetTintColor` 或替换整个 SvgBox 控件来改变颜色，不如 Label 直接。因此**关闭按钮建议保持现有文本方式**。
+	当前关闭按钮用文本 `✕` 实现，hover 时改变 `Style.BackColor` 和 `Style.ForeColor`。如果换成 SvgBox，需要用 `SetTintColor` 或替换整个 SvgBox 控件来改变颜色，不如 Label 直接。因此**关闭按钮建议保持现有文本方式**。
+
+	#### 坑5：RemoveTab 遇到 locked tab 导致死循环
+
+	**问题**：`while (m_tabBar->GetTabCount() > 0) { m_tabBar->RemoveTab(0); }` 中如果第一个 tab 是 `locked=true`，`RemoveTab` 会直接 return 不删除，导致死循环，日志文件暴涨到 40MB。
+
+	**原因**：`RemoveTab` 第65行 `if (!tab || tab->IsLocked()) return;` 跳过 locked 标签，但调用方没有检查删除是否成功。
+
+	**修复**：TabBar 新增 `RemoveUnlockedTabs()` 接口，内部从后往前遍历，只删除非锁定标签：
+
+	```cpp
+	void TabBar::RemoveUnlockedTabs() {
+	    for (int i = (int)m_tabs.size() - 1; i >= 0; --i) {
+	        if (m_tabs[i] && !m_tabs[i]->IsLocked()) {
+	            RemoveTab(i);
+	        }
+	    }
+	}
+	```
+
+	外部调用：
+	```cpp
+	m_tabBar->RemoveUnlockedTabs();  // 保留 locked 标签，删除其他
+	```
+
+	**教训**：不要用 `while+RemoveTab(0)` 的方式清空标签，应该用 `RemoveUnlockedTabs()` 或 `RemoveAllTabs()`。
 
 ## TabButton 鼠标事件由 TabBar 代理
 
