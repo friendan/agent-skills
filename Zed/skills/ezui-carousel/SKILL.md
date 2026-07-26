@@ -216,6 +216,33 @@ std::function<void(int from, int to)> OnSlideChanged;
 
 **修复**：在 `SetAttribute("caption-title")` 和 `SetAttribute("caption-text")` 中判断 `m_captionBar` 是否已创建，只有首次设置时才创建。
 
+### 坑6：`caption-kind` 导致 hover 边框
+
+**问题**：设置 `caption-kind="primary"` 后，鼠标悬停时标题栏出现边框变色效果，影响美观。
+
+**原因**：`SetAttribute("kind")` 内部调用 `ApplyControlKindColors`，该函数不仅设置 `BackColor` 和 `ForeColor`，还设置了 `HoverStyle` 的边框（1px 带颜色）。即使后续清零 `HoverStyle.BackColor`，边框依然残留。
+
+**修复**：不调用 `SetAttribute("kind")`，改为直接读取 `g_controlKindColors` 全局颜色表，手动设置 `Style.BackColor` 和 `Style.ForeColor`，完全不设 `HoverStyle`，彻底禁用 hover 效果：
+
+```cpp
+else if (attrName == "caption-kind") {
+    if (m_captionBar) {
+        auto& colors = g_controlKindColors[(int)ControlKind::Default];
+        if (attrValue == L"primary") colors = g_controlKindColors[(int)ControlKind::Primary];
+        else if (attrValue == L"secondary") colors = g_controlKindColors[(int)ControlKind::Secondary];
+        // ... 其他 kind
+
+        m_captionBar->Style.BackColor = colors.Normal.BackColor;
+        m_captionBar->Style.ForeColor = colors.Normal.ForeColor;
+        // 不设 hover 样式，完全禁用 hover 效果
+        m_captionBar->HoverStyle.BackColor = Color(0);
+        m_captionBar->HoverStyle.ForeColor = Color(0);
+        m_captionBar->HoverStyle.Border.Style = StrokeStyle::None;
+        m_captionBar->Invalidate();
+    }
+}
+```
+
 ## 文件位置
 
 - 头文件：`src/include/EzUI/Carousel.h`
