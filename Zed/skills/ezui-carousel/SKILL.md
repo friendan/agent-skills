@@ -80,12 +80,27 @@ Carousel (VLayout)
 | `cover` | 保持宽高比裁剪填满 |
 | `original` | 显示原始尺寸 |
 
+### img 链接属性
+
+`<img>` 支持 `url` 和 `kind="link"` 属性，点击时用默认浏览器打开链接：
+
+```html
+<img src="ui/images/photo.jpg" size-mode="stretch" url="https://www.baidu.com" kind="link"></img>
+```
+
+| 属性 | 说明 |
+|------|------|
+| `url` | 点击时用默认浏览器打开的链接 |
+| `kind="link"` | 鼠标变为手势，启用点击跳转 |
+
+> **原理**：底层 `Control::OnMouseDown` 已内置 `kind="link"` + `url` 的处理——`kind="link"` 自动设鼠标为 HAND 手势，`url` 保存到 `m_url`，点击时调用 `ShellExecuteW` 打开浏览器。不需额外代码。
+
 ### 完整示例
 
 ```html
 <carousel interval="3000" ride="true" wrap="true" controls="true" controls-kind="primary" dock="fill" height="300">
     <carousel-item caption-title="第一张" caption-text="描述文字" caption-align="center">
-        <img src="ui/images/photo1.jpg" size-mode="stretch"></img>
+        <img src="ui/images/photo1.jpg" size-mode="stretch" url="https://www.baidu.com" kind="link"></img>
     </carousel-item>
     <carousel-item caption-title="第二张" caption-text="右对齐" caption-align="right" caption-kind="info">
         <img src="ui/images/photo2.jpg" size-mode="stretch"></img>
