@@ -49,8 +49,10 @@ Carousel (VLayout)
 | `wrap` | 是否循环播放 | `wrap="true"` |
 | `pause` | 悬停时暂停 | `pause="true"`（默认） |
 | `controls` | 是否显示底部控制按钮 | `controls="true"` |
-| `controls-kind` | 控制按钮的 kind 风格 | `controls-kind="info"` |
-| `controls-gap` | 控制按钮间距(px) | `controls-gap="10"` |
+	| `controls-kind` | 控制按钮的 kind 风格 | `controls-kind="info"` |
+	| `controls-gap` | 控制按钮间距(px) | `controls-gap="10"` |
+	| `page-width` | 页码标签宽度(px) | `page-width="50"` |
+	| `page-gap` | 页码与按钮间距(px) | `page-gap="15"` |
 
 ### CarouselItem 标签属性
 
@@ -98,7 +100,7 @@ Carousel (VLayout)
 ### 完整示例
 
 ```html
-<carousel interval="3000" ride="true" wrap="true" controls="true" controls-kind="primary" dock="fill" height="300">
+<carousel interval="3000" ride="true" wrap="true" controls="true" controls-kind="primary" page-width="60" page-gap="20" dock="fill" height="300">
     <carousel-item caption-title="第一张" caption-text="描述文字" caption-align="center">
         <img src="ui/images/photo1.jpg" size-mode="stretch" url="https://www.baidu.com" kind="link"></img>
     </carousel-item>
@@ -166,7 +168,9 @@ std::function<void(int from, int to)> OnSlideChanged;
 - 构造时创建一个 `HLayout`（固定高度30px）放在最底部
 - 内部用 lambda 创建 4 个 `Label` 按钮，设 `kind="primary"`，圆角5px
 - 首尾 `Spacer` 弹性撑开实现居中，按钮间 `HSpacer(10)` 保持间距
+- 中间显示页码标签（`1/3` 格式），固定宽度50px，与按钮间距15px
 - 通过 `controls` 属性控制显示/隐藏
+- `controls-kind` 设置按钮风格，不影响页码标签
 
 ### Caption 标题栏
 
