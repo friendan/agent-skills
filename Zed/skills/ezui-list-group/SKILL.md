@@ -42,6 +42,7 @@ ListGroup (VLayout)
 | `active` | 激活状态（蓝色高亮） | `active="true"` |
 | `disabled` | 禁用状态（灰色不可点击） | `disabled="true"` |
 | `kind` | 颜色变体（primary/success/danger 等） | `kind="danger"` |
+| `text-align` | 文字对齐：`left` / `center` / `right` | `text-align="center"` |
 
 ### 完整示例
 
