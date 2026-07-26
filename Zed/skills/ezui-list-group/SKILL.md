@@ -159,8 +159,22 @@ if (group) {
 **ListGroupItem 中的使用：**
 
 - 构造时调用 `SetEventBubble(true)`，让自己成为冒泡目标
-- `Add` 方法递归设置所有子控件及后代控件的 `SetEventBubble(true)`
+- `Add` 方法调用 `Control::EnableEventBubbleRecursive(childCtl)` 递归设置所有子控件及后代控件的冒泡
 - 子控件的鼠标事件自动冒泡到 `ListGroupItem`，触发 `EventHandler` 中的 hover/click 处理
+
+**`EnableEventBubbleRecursive` 静态方法（`Control.h` 中声明，`Control.cpp` 中实现）：**
+
+```cpp
+static void Control::EnableEventBubbleRecursive(Control* ctl) {
+    if (!ctl) return;
+    ctl->SetEventBubble(true);
+    for (auto& c : ctl->GetControls()) {
+        if (!c->IsSpacer()) EnableEventBubbleRecursive(c);
+    }
+}
+```
+
+后续其他需要事件冒泡的控件（如 Carousel、Accordion）可以直接调用此方法，无需重复实现递归逻辑。
 
 **冒泡流程：**
 
@@ -201,7 +215,7 @@ if (group) {
 
 `ListGroupItem::Add` 中只对直接子控件设 `SetEventBubble(true)` 不够，子控件内部的后代控件（如 hlayout 内部的 label）没有开启冒泡。
 
-**修复**：使用递归 lambda 遍历设置所有后代控件。
+**修复**：使用递归 lambda 遍历设置所有后代控件。后来抽取为 `Control::EnableEventBubbleRecursive` 静态方法，方便其他控件复用。
 
 ## 文件位置
 
