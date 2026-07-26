@@ -33,7 +33,9 @@ Spinner 是一个旋转加载动画控件，类似 Bootstrap 的 `spinner-border
 |------|------|--------|------|
 | `kind` | 颜色风格（复用 ControlKind） | `primary` | `kind="danger"` |
 | `spinner-size` | 尺寸（像素） | `32` | `spinner-size="48"` |
+| `spinner-duration` | 转一圈的时长（毫秒） | `500` | `spinner-duration="200"` |
 | `spinner-sm` | 是否小尺寸（16px） | `false` | `spinner-sm="true"` |
+| `spinner-speed` | 转一圈的时长（毫秒） | `500` | `spinner-speed="200"` |
 
 ### 完整示例
 
@@ -52,6 +54,11 @@ Spinner 是一个旋转加载动画控件，类似 Bootstrap 的 `spinner-border
 <!-- 自定义尺寸 -->
 <spinner kind="primary" spinner-size="48"></spinner>
 <spinner kind="danger" spinner-size="64"></spinner>
+
+<!-- 不同速度 -->
+<spinner kind="primary" spinner-speed="200" spinner-sm="true"></spinner>
+<spinner kind="primary" spinner-speed="500" spinner-sm="true"></spinner>
+<spinner kind="primary" spinner-speed="1000" spinner-sm="true"></spinner>
 ```
 
 ## C++ API
@@ -66,6 +73,10 @@ int size = sp->GetSpinnerSize();
 
 // 设置颜色风格
 sp->SetKind(ControlKind::Primary);
+
+// 设置速度（转一圈的毫秒数）
+sp->SetDuration(300);
+int duration = sp->GetDuration();
 
 // 控制动画
 sp->Start();   // 开始旋转
