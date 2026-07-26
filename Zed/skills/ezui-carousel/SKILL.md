@@ -247,6 +247,47 @@ else if (attrName == "caption-kind") {
 }
 ```
 
+### 坑7：鼠标悬停时自动轮播没有暂停
+
+**问题**：鼠标停留在 Carousel 的图片上时，自动轮播仍然执行切换，不符合常规交互预期。
+
+**原因**：Carousel 的 `OnMouseEnter`/`OnMouseLeave` 只在鼠标直接进入/离开 Carousel 控件本身时触发。鼠标进入子控件（`CarouselItem`、`<img>` 等）时，Carousel 收不到鼠标事件，无法暂停定时器。
+
+**修复过程**（踩了不少坑）：
+
+1. ❌ 尝试在子控件上递归绑定 `EventHandler` 冒泡鼠标事件——子控件可能已有自己的 EventHandler（如按钮点击），覆盖后功能异常。
+2. ❌ 尝试用 `WindowFromPoint` + `GetParent` 检测鼠标是否在顶层窗口内——`Hwnd()` 返回的是顶层 Window 句柄，检测的是整个窗口区域而非 Carousel 控件区域。
+3. ❌ 尝试用 `GetWindowRect(Hwnd())` 获取窗口矩形——同样检测的是整个窗口。
+4. ❌ `while(true)` + `Sleep(200)` 忙等——线程卡死，timer 无法响应 Stop。
+5. ✅ 最终方案：在 `Timer::Tick` 回调的 `BeginInvoke` 中，用 `GetCursorPos` 获取鼠标屏幕坐标，用 `Control::GetScreenRect()` 获取 **Carousel 控件自身**的屏幕矩形，两者比较判断鼠标是否在 Carousel 区域内：
+
+```cpp
+m_timer->Tick = [this](Timer* t) {
+    t->Stop();
+    Sleep(Interval > 0 ? Interval : 5000);
+    BeginInvoke([this, t]() {
+        bool mouseInside = false;
+        POINT pt;
+        if (GetCursorPos(&pt)) {
+            Rect r = GetScreenRect();  // Carousel 自身的屏幕坐标
+            mouseInside = (pt.x >= r.X && pt.x <= r.GetRight() &&
+                           pt.y >= r.Y && pt.y <= r.GetBottom());
+        }
+        if (!mouseInside) {
+            Next();
+        }
+        if (Interval > 0) {
+            t->Start();
+        }
+    });
+};
+```
+
+**关键点**：
+- `GetScreenRect()` 是 `Control::GetScreenRect()`，获取的是**当前控件**（Carousel）的屏幕坐标，不是顶层窗口的坐标
+- `GetCursorPos` 获取的是屏幕坐标，两者坐标系一致
+- 鼠标在 Carousel 内时只跳过 `Next()`，`t->Start()` 仍然执行，保证下一轮检测继续
+
 ## 文件位置
 
 - 头文件：`src/include/EzUI/Carousel.h`
